@@ -7,9 +7,9 @@ from baselines import BASELINE_COLUMNS, calculate_baselines
 def candles_from_returns(returns):
     price = 100.0
     rows = [(0, price, price, price, price)]
-    for hour, value in enumerate(returns, start=1):
+    for day, value in enumerate(returns, start=1):
         close = price * math.exp(value)
-        rows.append((hour, max(price, close), min(price, close), price, close))
+        rows.append((day, max(price, close), min(price, close), price, close))
         price = close
     return rows
 
@@ -53,7 +53,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_price_scaling_does_not_change_measures(self):
         rows = candles_from_returns([0.01, -0.02, 0.03, -0.01])
-        scaled = [(hour, *(price * 1000 for price in prices)) for hour, *prices in rows]
+        scaled = [(day, *(price * 1000 for price in prices)) for day, *prices in rows]
         original = calculate_baselines(rows, window=2)
         changed = calculate_baselines(scaled, window=2)
         for before, after in zip(original, changed):

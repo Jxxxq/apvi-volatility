@@ -7,7 +7,7 @@ from collections import deque
 from pathlib import Path
 
 
-PRICE_COLUMNS = ("hour", "high", "low", "open", "close")
+PRICE_COLUMNS = ("day", "high", "low", "open", "close")
 BASELINE_COLUMNS = ("log_return", "rolling_std", "ewma_volatility", "parkinson_volatility")
 
 
@@ -19,16 +19,16 @@ def calculate_baselines(rows, window=20, decay=0.94):
 
     returns = deque(maxlen=window)
     range_variances = deque(maxlen=window)
-    previous_hour = previous_close = ewma_variance = None
+    previous_day = previous_close = ewma_variance = None
     results = []
 
-    for hour, high, low, opening, close in rows:
+    for day, high, low, opening, close in rows:
         if any(not math.isfinite(price) or price <= 0 for price in (high, low, opening, close)):
-            raise ValueError(f"hour {hour}: prices must be finite and positive")
+            raise ValueError(f"day {day}: prices must be finite and positive")
         if not low <= min(opening, close) <= max(opening, close) <= high:
-            raise ValueError(f"hour {hour}: high and low must contain the open and close")
-        if previous_hour is not None and hour != previous_hour + 1:
-            raise ValueError("candles must be ordered and exactly one hour apart")
+            raise ValueError(f"day {day}: high and low must contain the open and close")
+        if previous_day is not None and day != previous_day + 1:
+            raise ValueError("candles must be ordered with consecutive trading-day indices")
 
         # subtract logs so large price ratios don't overflow
         log_range = math.log(high) - math.log(low)
@@ -50,9 +50,9 @@ def calculate_baselines(rows, window=20, decay=0.94):
                 ewma = math.sqrt(ewma_variance)
 
         results.append(dict(zip(PRICE_COLUMNS + BASELINE_COLUMNS, (
-            hour, high, low, opening, close, log_return, rolling_std, ewma, parkinson,
+            day, high, low, opening, close, log_return, rolling_std, ewma, parkinson,
         ))))
-        previous_hour, previous_close = hour, close
+        previous_day, previous_close = day, close
 
     if not results:
         raise ValueError("the CSV needs at least one candle")
@@ -60,13 +60,13 @@ def calculate_baselines(rows, window=20, decay=0.94):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="calculate hourly volatility baselines")
+    parser = argparse.ArgumentParser(description="calculate daily volatility baselines")
     parser.add_argument("input", nargs="?", type=Path, default=Path("data/market.csv"),
-                        help="hourly candle CSV (default: data/market.csv)")
+                        help="daily candle CSV (default: data/market.csv)")
     parser.add_argument("--output", type=Path, default=Path("data/baselines.csv"),
                         help="output CSV (default: data/baselines.csv)")
     parser.add_argument("--window", type=int, default=20,
-                        help="rolling SD/Parkinson window and EWMA seed length (default: 20 candles)")
+                        help="rolling SD/Parkinson window and EWMA seed length (default: 20 trading days)")
     parser.add_argument("--decay", type=float, default=0.94,
                         help="EWMA weight on previous variance, between 0 and 1 (default: 0.94)")
     args = parser.parse_args()
@@ -78,16 +78,16 @@ def main():
         with args.input.open(newline="", encoding="utf-8-sig") as source:
             reader = csv.DictReader(source)
             if not set(PRICE_COLUMNS).issubset(reader.fieldnames or []):
-                raise ValueError("expected hour, high, low, open, close columns from market.py")
-            rows = [(int(row["hour"]), *(float(row[key]) for key in PRICE_COLUMNS[1:]))
+                raise ValueError("expected day, high, low, open, close columns; regenerate with python market.py --days 500")
+            rows = [(int(row["day"]), *(float(row[key]) for key in PRICE_COLUMNS[1:]))
                     for row in reader]
         results = calculate_baselines(rows, args.window, args.decay)
         settings = {
             "input": str(args.input.resolve()),
             "output": str(args.output.resolve()),
             "rows": len(results),
-            "candle_interval": "1 hour",
-            "units": "decimal log-return volatility per hour",
+            "candle_interval": "1 trading day",
+            "units": "decimal log-return volatility per trading day",
             "annualized": False,
             "return_definition": "ln(close_t / close_previous)",
             "rolling_window": args.window,
