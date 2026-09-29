@@ -1,7 +1,9 @@
+# school documents and planning notes
 /plan.md
 /Astronomy-Inspired Method for Measuring Financial Volatility.pdf
+/Progress Report*
 
-# Generated data and local Python files
+# generated data and local Python files
 /data/
 __pycache__/
 *.py[cod]

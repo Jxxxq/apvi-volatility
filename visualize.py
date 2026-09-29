@@ -6,7 +6,6 @@ from pathlib import Path
 
 
 def render_chart(rows):
-    """Render (hour, high, low, open, close) rows as an HTML/SVG chart."""
     if not rows:
         raise ValueError("the CSV needs at least one candle")
     for hour, high, low, opening, close in rows:

@@ -6,7 +6,6 @@ from pathlib import Path
 
 
 def simulate_market(hours=24, volatility=0.01, seed=42):
-    """Return (hour, high, low, open, close) candles, starting at price 100."""
     if hours < 1:
         raise ValueError("duration must be at least 1 hour")
     if not math.isfinite(volatility) or volatility < 0:
