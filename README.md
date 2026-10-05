@@ -22,11 +22,28 @@ python visualize.py data/baselines_500.csv --true-volatility 0.04 --output data/
 ```
 
 The generator uses 60 equally spaced intraday steps per trading day, each
-with log-return standard deviation `volatility / sqrt(60)`. It derives the
-daily open, high, low, and close from this path. Volatility stays constant
-throughout a run, and each day opens at the previous close, with no separate
-overnight jump. Day indices start at 0 and count trading observations, not
-calendar dates; weekends and holidays are not simulated.
+with log-return standard deviation `daily volatility / sqrt(60)`. It derives
+the daily open, high, low, and close from this path. Volatility stays constant
+unless `--high-volatility` is given. Each day opens at the previous close,
+with no separate overnight jump. Day indices start at 0 and count trading
+observations, not calendar dates; weekends and holidays are not simulated.
+
+For known low/high periods, use `--volatility` for the low daily volatility,
+`--high-volatility` for the high daily volatility, and `--regime-days` for the
+length of each period:
+
+```powershell
+python market.py --days 500 --volatility 0.01 --high-volatility 0.04 --regime-days 100 --seed 42 --output data/market_regimes.csv
+python baselines.py data/market_regimes.csv --output data/baselines_regimes.csv
+```
+
+This starts with 100 low-volatility days, then alternates 100 high and 100 low
+days. The market CSV adds `regime` (`low` or `high`) and `true_volatility` for
+each day. These are simulation labels, not observed market volatility. The
+baseline calculator accepts the CSV but currently outputs only prices and
+estimates, so join its output to the market CSV by `day` when evaluating
+regime detection. The chart's single `--true-volatility` accuracy table applies
+only to constant-volatility runs; omit that option for a regime run.
 
 Existing CSVs without a `day` column must be regenerated before use.
 The chart includes the baseline formulas; displaying the LaTeX requires an

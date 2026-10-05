@@ -35,6 +35,45 @@ class DailyWorkflowTests(unittest.TestCase):
             with self.subTest(days=days), self.assertRaises(ValueError):
                 simulate_market(days=days)
 
+    def test_alternating_regimes_have_known_volatility_and_continuous_prices(self):
+        rows = simulate_market(days=12, volatility=0.01, high_volatility=0.04,
+                               regime_days=3, seed=42)
+        self.assertEqual([row[5] for row in rows], ["low"] * 3 + ["high"] * 3 +
+                         ["low"] * 3 + ["high"] * 3)
+        self.assertEqual([row[6] for row in rows], [0.01] * 3 + [0.04] * 3 +
+                         [0.01] * 3 + [0.04] * 3)
+        self.assertEqual(rows, simulate_market(days=12, volatility=0.01,
+                                                high_volatility=0.04, regime_days=3, seed=42))
+        for previous, current in zip(rows, rows[1:]):
+            self.assertEqual(current[3], previous[4])
+        for settings in ({"high_volatility": 0.01}, {"high_volatility": float("nan")},
+                         {"high_volatility": 0.04, "regime_days": 0}):
+            with self.subTest(settings=settings), self.assertRaises(ValueError):
+                simulate_market(days=3, volatility=0.01, **settings)
+
+    def test_regime_csv_works_as_baseline_input(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            market = Path(directory) / "market.csv"
+            baselines = Path(directory) / "baselines.csv"
+            commands = [
+                ["market.py", "--days", "9", "--volatility", "0.01", "--high-volatility", "0.04",
+                 "--regime-days", "3", "--output", str(market)],
+                ["baselines.py", str(market), "--output", str(baselines)],
+            ]
+            for command in commands:
+                result = subprocess.run([sys.executable, "-B", *command], cwd=root,
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            with market.open(newline="", encoding="utf-8") as source:
+                reader = csv.DictReader(source)
+                self.assertEqual(reader.fieldnames, ["day", "high", "low", "open", "close",
+                                                     "regime", "true_volatility"])
+                rows = list(reader)
+            self.assertEqual([(row["regime"], row["true_volatility"]) for row in rows],
+                             [("low", "0.01")] * 3 + [("high", "0.04")] * 3 +
+                             [("low", "0.01")] * 3)
+
     def test_daily_files_work_across_all_three_commands(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
