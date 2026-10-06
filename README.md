@@ -259,10 +259,9 @@ python visualize.py --comparison data/comparison --output visual.html
 ```
 
 The page reads the saved settings, summary, and first seed's test scores. It
-shows all nine methods' results, baseline and paired-score charts, the formula,
-and the limits of the experiment. Chart legend checkboxes toggle individual
-lines. The file is self-contained and needs no plotting package or internet
-connection. Use `--output data/market.html` to refresh that existing page.
+shows a plain results table, two static charts, and the paired formula. The
+file is self-contained and needs no plotting package or internet connection.
+Use `--output data/market.html` to refresh that existing page.
 
 ### Initial synthetic results
 

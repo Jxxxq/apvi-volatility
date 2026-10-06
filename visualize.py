@@ -48,16 +48,15 @@ def comparison_chart(records, series, chart_id, percent=False, thresholds=None):
                                f"{left + (index + 1) * spacing:.2f},{y(value):.2f}"))
             else:
                 points.append(f"{x(index):.2f},{y(value):.2f}")
-        elements.append(f'<g data-series="{column}"><polyline points="{" ".join(points)}" '
+        elements.append(f'<g><polyline points="{" ".join(points)}" '
                         f'fill="none" stroke="{color}" stroke-width="2"/>')
         if column in thresholds:
             position = y(thresholds[column])
             elements.append(f'<line x1="{left}" x2="{left + plot_width}" y1="{position:.2f}" y2="{position:.2f}" '
                             f'stroke="{color}" stroke-dasharray="7 5"><title>{escape(label)} threshold: {thresholds[column]:.4f}</title></line>')
         elements.append('</g>')
-        legend.append(f'<label style="--series-color:{color}"><input type="checkbox" checked '
-                      f'data-chart="{chart_id}" data-toggle="{column}"> {escape(label)}</label>')
-    return f'''<div class="legend">{''.join(legend)}</div>
+        legend.append(f'<span style="color:{color}">{escape(label)}</span>')
+    return f'''<p>{' &middot; '.join(legend)}</p>
     <svg id="{chart_id}" viewBox="0 0 {width} {height}" role="img" aria-label="{escape(', '.join(label for _, label, _ in series))}">
     {''.join(elements)}<text x="520" y="285" text-anchor="middle">Trading day</text></svg>'''
 
@@ -86,11 +85,11 @@ def render_comparison(folder):
     table_rows = []
     for method, label in METHODS.items():
         spread = summary[method]["average_precision_sd"]
-        spread_text = f'<span class="muted"> &plusmn; {float(spread):.3f}</span>' if spread else ""
+        spread_text = f' &plusmn; {float(spread):.3f}' if spread else ""
         cells = [escape(label), metric(method, "average_precision") + spread_text,
                  metric(method, "precision", ".1%"), metric(method, "recall", ".1%"),
                  metric(method, "false_positive_rate", ".1%"), metric(method, "mean_delay_days", ".1f")]
-        table_rows.append(f'<tr class="{"featured" if method == "apvi" else ""}"><th scope="row">{cells[0]}</th>' +
+        table_rows.append(f'<tr><th scope="row">{cells[0]}</th>' +
                           ''.join(f'<td>{value}</td>' for value in cells[1:]) + '</tr>')
     volatility = comparison_chart(records, [("true_volatility", "True daily volatility", "#172a3a"),
                                              ("rolling_std", "Rolling SD", "#2166ac"),
@@ -103,83 +102,44 @@ def render_comparison(folder):
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Volatility comparison</title>
 <style>
-  * {{ box-sizing: border-box; }}
-  body {{ margin: 0; background: #f3f5f8; color: #172a3a; font: 16px/1.55 system-ui, sans-serif; }}
-  main {{ max-width: 1140px; margin: auto; padding: 38px 24px; }}
-  h1 {{ font-size: 36px; line-height: 1.2; margin: 8px 0 16px; }}
-  h2 {{ font-size: 23px; margin: 0 0 12px; }}
-  h3 {{ font-size: 18px; margin: 0 0 8px; }}
-  p {{ margin: 10px 0; }} .muted, .eyebrow {{ color: #566677; }}
-  .eyebrow {{ font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }}
-  section {{ background: white; margin: 22px 0; padding: 26px; border: 1px solid #dce3eb; border-radius: 12px; }}
-  .cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }}
-  .card {{ background: white; padding: 18px 22px; border-radius: 10px; border-top: 4px solid #2166ac; }}
-  .card strong {{ display: block; font-size: 34px; }}
-  .table-wrap {{ overflow-x: auto; }} table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
-  th, td {{ padding: 12px 10px; border-bottom: 1px solid #e4e9ef; text-align: right; white-space: nowrap; }}
-  th:first-child {{ text-align: left; }} thead {{ background: #f3f5f8; }} .featured {{ background: #eaf2fc; }}
-  svg {{ width: 100%; display: block; }} svg text {{ font: 12px system-ui, sans-serif; fill: #48586b; }}
-  .legend {{ display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }}
-  .legend label {{ cursor: pointer; color: var(--series-color); }} input {{ accent-color: var(--series-color); }}
-  .formula {{ overflow-wrap: anywhere; padding: 12px 16px; background: #f3f5f8; border-radius: 6px; font: 15px/1.8 ui-monospace, monospace; }}
-  @media (max-width: 650px) {{ main {{ padding: 20px 12px; }} section {{ padding: 16px; }} .cards {{ grid-template-columns: 1fr; }} h1 {{ font-size: 28px; }} }}
-</style></head><body><main>
-<div class="eyebrow">Astronomy-inspired financial volatility</div>
-<h1>Paired index: first simulation results</h1>
-<p>The paired index's average precision was <strong>{abs(difference):.4f} {direction}</strong> the matched simple average.
-It had higher average precision in <strong>{int(settings['paired_ap_wins'])} of {int(settings['seeds'])} seeds</strong>.
-{escape(METHODS[best])} had the highest mean average precision in this experiment.</p>
-<div class="cards">
-  <div class="card">Paired index AP<strong>{metric('apvi', 'average_precision')}</strong></div>
-  <div class="card">Matched average AP<strong>{metric('arithmetic', 'average_precision')}</strong></div>
-  <div class="card">{escape(METHODS[best])} AP<strong>{metric(best, 'average_precision')}</strong></div>
-</div>
-<section><h2>How the comparison was run</h2>
-<p><strong>{int(settings['seeds'])} seeds &middot; {int(settings['days']):,} trading days each &middot;
+  body {{ margin: 16px; max-width: 1050px; background: white; color: black; font: 14px/1.4 Arial, sans-serif; }}
+  h1 {{ font-size: 22px; }} h2 {{ font-size: 18px; margin-top: 24px; }}
+  .table-wrap {{ overflow-x: auto; }} table {{ border-collapse: collapse; }}
+  th, td {{ padding: 5px 12px; border: 1px solid #aaa; text-align: left; white-space: nowrap; }}
+  svg {{ width: 100%; max-width: 1000px; display: block; }} svg text {{ font: 12px Arial, sans-serif; fill: #333; }}
+  pre {{ white-space: pre-wrap; overflow-wrap: anywhere; }}
+</style></head><body>
+<h1>Volatility comparison</h1>
+<p>{int(settings['seeds'])} seeds &middot; {int(settings['days']):,} trading days each &middot;
 {float(settings['volatility']):.2%} / {float(settings['high_volatility']):.2%} daily volatility &middot;
-{int(settings['regime_days'])}-day alternating periods</strong></p>
-<p>{int(settings['train_days'])} initial days fit the reference scales;
-{int(settings['validation_days'])} validation days set each method's threshold;
-the last <strong>{test_days} days per seed</strong> are used for the results below.
-Thresholds target at most {float(settings['false_positive_rate']):.0%} false alarms on validation low-volatility days.
-Rolling window: {int(settings['window'])} days. EWMA decay: {float(settings['decay']):.2f}.</p>
-<p class="muted">Target: identify the current high-volatility state using information available at that day's close.
-{sum(row['regime'] == 'high' for row in records) / len(records):.0%} of test days are high volatility in this block design.</p></section>
-<section><h2>Test results across all seeds</h2>
-<p>Average precision (AP) measures how well the scores rank high-volatility days; higher is better.
-Recall is the fraction of high days detected. False-positive rate is the fraction of low days that triggered an alarm.</p>
+{int(settings['regime_days'])}-day periods.<br>
+Per seed: {int(settings['train_days'])} training days, {int(settings['validation_days'])} validation days, {test_days} test days.
+Thresholds target {float(settings['false_positive_rate']):.0%} validation false alarms. Window: {int(settings['window'])} days; decay: {float(settings['decay']):.2f}.</p>
+<h2>Results</h2>
 <div class="table-wrap"><table><thead><tr><th scope="col">Method</th><th scope="col">AP &plusmn; SD</th><th scope="col">Precision</th>
 <th scope="col">Recall</th><th scope="col">False alarms</th><th scope="col">Delay (days)</th></tr></thead>
 <tbody>{''.join(table_rows)}</tbody></table></div>
-<p class="muted">Means across seeds; AP spread is the sample standard deviation, not a confidence interval.
-Delay is averaged over detected episodes. APVI's missed-episode rate: {metric('apvi', 'missed_episode_rate', '.1%')}.</p></section>
-<section><h2>Baseline response &middot; seed {seed}</h2>
-<p>Only test days {int(records[0]['day'])}&ndash;{int(records[-1]['day'])} are shown.
-Blue shading marks the known high-volatility periods. Toggle a legend item to hide or show a line.</p>{volatility}</section>
-<section><h2>Paired index and matched average &middot; seed {seed}</h2>
-<p>Both use the same training scales and smoothing. Dashed lines are the thresholds fixed on validation data.
-These are dimensionless scores.</p>{paired}</section>
-<section><h2>Implemented formula</h2>
-<p>Let <code>a = |ln(close / previous close)|</code> and
-<code>b = ln(high / low) / sqrt(4 ln 2)</code>. Standardize each using its fixed training mean and sample standard deviation to get
-<code>z_a</code> and <code>z_b</code>, then set <code>u = max(z_a, 0)</code> and <code>v = max(z_b, 0)</code>.</p>
-<div class="formula">APVI[t] = {float(settings['decay']):.2f} APVI[t-1] + {1-float(settings['decay']):.2f} sqrt(u[t] v[t])<br>
-Average[t] = {float(settings['decay']):.2f} Average[t-1] + {1-float(settings['decay']):.2f} (u[t] + v[t]) / 2</div>
-<p>Both scores start at zero and carry their state across the splits. Training scores are used for initialization and excluded from evaluation.</p>
-<details><summary>Baseline definitions</summary><p>Rolling SD: sample standard deviation of the last W close-to-close log returns.
-EWMA: square root of exponentially smoothed squared log returns.
-Parkinson: square root of the mean of ln(high / low)&sup2; / (4 ln 2) over W days.
-EWMA Parkinson applies exponential smoothing to that daily range variance.</p></details></section>
-<section><h2>What these results establish</h2><p>This is an initial comparison on long, regular volatility blocks.
-There are no separate shocks, overnight gaps, or measurement errors. Historical SPY testing has not started.
-The results do not establish future forecasting performance or performance on real markets.</p></section>
-</main><script>
-document.querySelectorAll('input[data-toggle]').forEach(input => {{
-  input.addEventListener('change', () => {{
-    document.querySelector('#' + input.dataset.chart + ' [data-series="' + input.dataset.toggle + '"]').style.display = input.checked ? '' : 'none';
-  }});
-}});
-</script></body></html>'''
+<p>Means across seeds. Average precision (AP) measures ranking quality; higher is better. SD is the spread across seeds.
+Recall is the fraction of high days detected; false alarms are the fraction of low days flagged.
+Delay covers detected episodes. APVI missed {metric('apvi', 'missed_episode_rate', '.1%')} of episodes.</p>
+<p>APVI's AP was {abs(difference):.4f} {direction} the matched average, beating it in {int(settings['paired_ap_wins'])} of {int(settings['seeds'])} seeds.
+{escape(METHODS[best])} had the highest mean AP.</p>
+<h2>Baseline estimates</h2>
+<p>Seed {seed}, test days {int(records[0]['day'])}&ndash;{int(records[-1]['day'])}. Blue shading marks high volatility.</p>
+{volatility}
+<h2>Paired index and simple average</h2>
+<p>Same test days. Scores are dimensionless; dashed lines show the fixed validation thresholds.</p>
+{paired}
+<h2>Paired formula</h2>
+<pre>a = |ln(close / previous close)|
+b = ln(high / low) / sqrt(4 ln 2)
+u = max((a - training mean of a) / training SD of a, 0)
+v = max((b - training mean of b) / training SD of b, 0)
+APVI[t] = {float(settings['decay']):.2f} APVI[t-1] + {1-float(settings['decay']):.2f} sqrt(u[t] v[t])
+Average[t] = {float(settings['decay']):.2f} Average[t-1] + {1-float(settings['decay']):.2f} (u[t] + v[t]) / 2</pre>
+<p>This measures the current simulated regime at the day's close. These runs use regular volatility blocks;
+shocks, overnight gaps, and historical SPY data have not been tested.</p>
+</body></html>'''
 
 
 def accuracy_table(records, true_volatility, tolerance=0.10):
