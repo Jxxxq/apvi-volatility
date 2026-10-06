@@ -252,6 +252,18 @@ responses and average precision across all seeds. Matplotlib is optional;
 calculation and CSV output use only the standard library. Use `--help` for the
 simulation, split, seed, window, and threshold settings.
 
+To turn the saved results into an offline HTML page:
+
+```powershell
+python visualize.py --comparison data/comparison --output visual.html
+```
+
+The page reads the saved settings, summary, and first seed's test scores. It
+shows all nine methods' results, baseline and paired-score charts, the formula,
+and the limits of the experiment. Chart legend checkboxes toggle individual
+lines. The file is self-contained and needs no plotting package or internet
+connection. Use `--output data/market.html` to refresh that existing page.
+
 ### Initial synthetic results
 
 With the defaults above, the 20-seed means are:

@@ -78,6 +78,7 @@ class ComparisonTests(unittest.TestCase):
                 ["paired.py", str(market), "--train-days", "40", "--window", "5", "--output", str(paired)],
                 ["compare.py", "--days", "120", "--train-days", "40", "--validation-days", "40",
                  "--window", "5", "--regime-days", "10", "--seeds", "2", "--output", str(output / "comparison")],
+                ["visualize.py", "--comparison", str(output / "comparison"), "--output", str(output / "visual.html")],
             ]
             for command in commands:
                 completed = subprocess.run([sys.executable, "-B", *command], cwd=root, capture_output=True, text=True)
@@ -102,6 +103,17 @@ class ComparisonTests(unittest.TestCase):
             settings = json.loads((output / "comparison" / "settings.json").read_text())
             self.assertEqual(settings["fits"][0]["reference"]["last_day"], 39)
             self.assertEqual(settings["seeds"], 2)
+            html = (output / "visual.html").read_text(encoding="utf-8")
+            self.assertIn("2 seeds", html)
+            self.assertIn("120 trading days", html)
+            self.assertIn("80&ndash;119", html)
+            self.assertNotIn("within &plusmn;", html)
+            self.assertNotIn('<script defer src=', html)
+            with (output / "comparison" / "summary.csv").open(newline="", encoding="utf-8") as source:
+                summary = list(csv.DictReader(source))
+            for row in summary:
+                self.assertIn(METHODS[row["method"]], html)
+                self.assertIn(f"{float(row['average_precision_mean']):.3f}", html)
 
 
 if __name__ == "__main__":

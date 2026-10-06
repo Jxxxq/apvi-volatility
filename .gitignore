@@ -5,6 +5,7 @@
 
 # generated data and local Python files
 /data/
+/visual.html
 __pycache__/
 *.py[cod]
 .venv/
