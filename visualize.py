@@ -1,6 +1,5 @@
 import argparse
 import csv
-import itertools
 import json
 import math
 import webbrowser
@@ -10,57 +9,6 @@ from pathlib import Path
 from compare import METHODS
 
 
-def comparison_chart(records, series, chart_id, percent=False, thresholds=None):
-    width, height, left, top, plot_width, plot_height = 1000, 290, 65, 18, 910, 222
-    values = [float(row[column]) for row in records for column, _, _ in series]
-    if any(not math.isfinite(value) for value in values):
-        raise ValueError("chart values must be finite")
-    thresholds = thresholds or {}
-    maximum = max(values + list(thresholds.values()) + [0.001]) * 1.1
-    spacing = plot_width / len(records)
-
-    def x(index):
-        return left + (index + 0.5) * spacing
-
-    def y(value):
-        return top + plot_height * (1 - value / maximum)
-
-    elements = []
-    for regime, group in itertools.groupby(enumerate(records), key=lambda item: item[1]["regime"]):
-        block = list(group)
-        if regime == "high":
-            elements.append(f'<rect x="{left + block[0][0] * spacing:.2f}" y="{top}" '
-                            f'width="{len(block) * spacing:.2f}" height="{plot_height}" fill="#e7f0fa"/>')
-    for tick in range(5):
-        value = maximum * tick / 4
-        label = f"{value:.1%}" if percent else f"{value:.2f}"
-        elements.append(f'<line x1="{left}" y1="{y(value):.2f}" x2="{left + plot_width}" y2="{y(value):.2f}" stroke="#d9e1ea"/>')
-        elements.append(f'<text x="{left - 10}" y="{y(value) + 4:.2f}" text-anchor="end">{label}</text>')
-    for index in sorted({round((len(records) - 1) * tick / 4) for tick in range(5)}):
-        elements.append(f'<text x="{x(index):.2f}" y="263" text-anchor="middle">{int(records[index]["day"])}</text>')
-    legend = []
-    for column, label, color in series:
-        points = []
-        for index, row in enumerate(records):
-            value = float(row[column])
-            if column == "true_volatility":
-                points.extend((f"{left + index * spacing:.2f},{y(value):.2f}",
-                               f"{left + (index + 1) * spacing:.2f},{y(value):.2f}"))
-            else:
-                points.append(f"{x(index):.2f},{y(value):.2f}")
-        elements.append(f'<g><polyline points="{" ".join(points)}" '
-                        f'fill="none" stroke="{color}" stroke-width="2"/>')
-        if column in thresholds:
-            position = y(thresholds[column])
-            elements.append(f'<line x1="{left}" x2="{left + plot_width}" y1="{position:.2f}" y2="{position:.2f}" '
-                            f'stroke="{color}" stroke-dasharray="7 5"><title>{escape(label)} threshold: {thresholds[column]:.4f}</title></line>')
-        elements.append('</g>')
-        legend.append(f'<span style="color:{color}">{escape(label)}</span>')
-    return f'''<p>{' &middot; '.join(legend)}</p>
-    <svg id="{chart_id}" viewBox="0 0 {width} {height}" role="img" aria-label="{escape(', '.join(label for _, label, _ in series))}">
-    {''.join(elements)}<text x="520" y="285" text-anchor="middle">Trading day</text></svg>'''
-
-
 def render_comparison(folder):
     settings = json.loads((folder / "settings.json").read_text(encoding="utf-8"))
     with (folder / "summary.csv").open(newline="", encoding="utf-8") as source:
@@ -68,78 +16,40 @@ def render_comparison(folder):
     seed = int(settings["seed"])
     with (folder / f"scores_seed_{seed}.csv").open(newline="", encoding="utf-8") as source:
         records = [row for row in csv.DictReader(source) if row["split"] == "test"]
-    if not records or not set(METHODS).issubset(summary):
-        raise ValueError("comparison needs test scores and a summary for every method")
-    fit = next(item for item in settings["fits"] if item["seed"] == seed)
+    shown_methods = ("apvi", "arithmetic", "rolling_std", "ewma_volatility", "parkinson_volatility")
+    if not records or not set(shown_methods).issubset(summary):
+        raise ValueError("comparison needs test scores and a summary for the five main methods")
     test_days = int(settings["days"]) - int(settings["train_days"]) - int(settings["validation_days"])
     if len(records) != test_days:
         raise ValueError("saved test scores do not match the comparison settings")
-
-    def metric(method, name, format_spec=".3f"):
-        value = summary[method][name + "_mean"]
-        return format(float(value), format_spec) if value else "N/A"
-
-    best = max(METHODS, key=lambda method: float(summary[method]["average_precision_mean"]))
-    difference = float(settings["paired_ap_difference_mean"])
-    direction = "higher than" if difference > 0 else "lower than" if difference < 0 else "equal to"
+    rows = [(int(row["day"]), *(float(row[key]) for key in ("high", "low", "open", "close")))
+            for row in records]
     table_rows = []
-    for method, label in METHODS.items():
-        spread = summary[method]["average_precision_sd"]
-        spread_text = f' &plusmn; {float(spread):.3f}' if spread else ""
-        cells = [escape(label), metric(method, "average_precision") + spread_text,
-                 metric(method, "precision", ".1%"), metric(method, "recall", ".1%"),
-                 metric(method, "false_positive_rate", ".1%"), metric(method, "mean_delay_days", ".1f")]
-        table_rows.append(f'<tr><th scope="row">{cells[0]}</th>' +
-                          ''.join(f'<td>{value}</td>' for value in cells[1:]) + '</tr>')
-    volatility = comparison_chart(records, [("true_volatility", "True daily volatility", "#172a3a"),
-                                             ("rolling_std", "Rolling SD", "#2166ac"),
-                                             ("ewma_volatility", "EWMA", "#b84a18"),
-                                             ("parkinson_volatility", "Parkinson", "#24805e")], "volatility-chart", percent=True)
-    paired = comparison_chart(records, [("apvi", "Paired index (APVI)", "#2166ac"),
-                                        ("arithmetic", "Matched simple average", "#b84a18")], "paired-chart",
-                              thresholds={key: fit["thresholds"][key] for key in ("apvi", "arithmetic")})
-    return f'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Volatility comparison</title>
-<style>
-  body {{ margin: 16px; max-width: 1050px; background: white; color: black; font: 14px/1.4 Arial, sans-serif; }}
-  h1 {{ font-size: 22px; }} h2 {{ font-size: 18px; margin-top: 24px; }}
-  .table-wrap {{ overflow-x: auto; }} table {{ border-collapse: collapse; }}
-  th, td {{ padding: 5px 12px; border: 1px solid #aaa; text-align: left; white-space: nowrap; }}
-  svg {{ width: 100%; max-width: 1000px; display: block; }} svg text {{ font: 12px Arial, sans-serif; fill: #333; }}
-  pre {{ white-space: pre-wrap; overflow-wrap: anywhere; }}
-</style></head><body>
-<h1>Volatility comparison</h1>
-<p>{int(settings['seeds'])} seeds &middot; {int(settings['days']):,} trading days each &middot;
-{float(settings['volatility']):.2%} / {float(settings['high_volatility']):.2%} daily volatility &middot;
-{int(settings['regime_days'])}-day periods.<br>
-Per seed: {int(settings['train_days'])} training days, {int(settings['validation_days'])} validation days, {test_days} test days.
-Thresholds target {float(settings['false_positive_rate']):.0%} validation false alarms. Window: {int(settings['window'])} days; decay: {float(settings['decay']):.2f}.</p>
-<h2>Results</h2>
-<div class="table-wrap"><table><thead><tr><th scope="col">Method</th><th scope="col">AP &plusmn; SD</th><th scope="col">Precision</th>
-<th scope="col">Recall</th><th scope="col">False alarms</th><th scope="col">Delay (days)</th></tr></thead>
-<tbody>{''.join(table_rows)}</tbody></table></div>
-<p>Means across seeds. Average precision (AP) measures ranking quality; higher is better. SD is the spread across seeds.
-Recall is the fraction of high days detected; false alarms are the fraction of low days flagged.
-Delay covers detected episodes. APVI missed {metric('apvi', 'missed_episode_rate', '.1%')} of episodes.</p>
-<p>APVI's AP was {abs(difference):.4f} {direction} the matched average, beating it in {int(settings['paired_ap_wins'])} of {int(settings['seeds'])} seeds.
-{escape(METHODS[best])} had the highest mean AP.</p>
-<h2>Baseline estimates</h2>
-<p>Seed {seed}, test days {int(records[0]['day'])}&ndash;{int(records[-1]['day'])}. Blue shading marks high volatility.</p>
-{volatility}
-<h2>Paired index and simple average</h2>
-<p>Same test days. Scores are dimensionless; dashed lines show the fixed validation thresholds.</p>
-{paired}
-<h2>Paired formula</h2>
-<pre>a = |ln(close / previous close)|
-b = ln(high / low) / sqrt(4 ln 2)
-u = max((a - training mean of a) / training SD of a, 0)
-v = max((b - training mean of b) / training SD of b, 0)
-APVI[t] = {float(settings['decay']):.2f} APVI[t-1] + {1-float(settings['decay']):.2f} sqrt(u[t] v[t])
-Average[t] = {float(settings['decay']):.2f} Average[t-1] + {1-float(settings['decay']):.2f} (u[t] + v[t]) / 2</pre>
-<p>This measures the current simulated regime at the day's close. These runs use regular volatility blocks;
-shocks, overnight gaps, and historical SPY data have not been tested.</p>
-</body></html>'''
+    for method in shown_methods:
+        cells = [escape(METHODS[method])]
+        for metric, format_spec in (("average_precision", ".3f"), ("precision", ".1%"),
+                                    ("recall", ".1%"), ("false_positive_rate", ".1%")):
+            value = summary[method][metric + "_mean"]
+            cells.append(format(float(value), format_spec) if value else "N/A")
+        table_rows.append('<tr>' + ''.join(f'<td>{value}</td>' for value in cells) + '</tr>')
+    comparison = f"""<p>Chart: seed {seed}, test days {int(records[0]['day'])}&ndash;{int(records[-1]['day'])}.
+    Low/high daily volatility: {float(settings['volatility']):.1%} / {float(settings['high_volatility']):.1%}, switching every {int(settings['regime_days'])} days.</p>
+    <p>Detection results: means across {int(settings['seeds'])} seeds, {int(settings['days']):,} trading days per seed
+    ({int(settings['train_days'])} training, {int(settings['validation_days'])} validation, {test_days} test).
+    Thresholds were set using validation data to allow at most {float(settings['false_positive_rate']):.0%} false alarms.</p>
+    <table><thead><tr><th scope="col">Method</th><th scope="col">Average precision (AP)</th>
+    <th scope="col">Precision</th><th scope="col">Recall</th><th scope="col">False-alarm rate</th></tr></thead>
+    <tbody>{''.join(table_rows)}</tbody></table>
+    <p>Precision: how many flagged days were actually high volatility.<br>
+    Recall: how many actual high-volatility days were detected.<br>
+    False-alarm rate: how many actual low-volatility days were incorrectly flagged.<br>
+    AP measures ranking quality across thresholds; higher is better.</p>"""
+    paired_formula = r"""<p>Paired index:
+    \(I_t = \lambda I_{t-1} + (1-\lambda)\sqrt{u_t v_t}\).</p>
+    <p>\(u_t=\max(z^a_t,0)\), \(v_t=\max(z^b_t,0)\), where \(z^a_t\) and \(z^b_t\) standardize
+    \(|r_t|\) and \(\ln(H_t/L_t)/\sqrt{4\ln 2}\) using fixed training means and sample standard deviations.
+    The matched average uses \((u_t+v_t)/2\) instead of \(\sqrt{u_t v_t}\).</p>"""
+    return render_chart(rows, comparison, paired_formula)
 
 
 def accuracy_table(records, true_volatility, tolerance=0.10):
@@ -175,7 +85,7 @@ def accuracy_table(records, true_volatility, tolerance=0.10):
   </table>'''
 
 
-def render_chart(rows, accuracy=""):
+def render_chart(rows, accuracy="", extra_formulas=""):
     if not rows:
         raise ValueError("the CSV needs at least one candle")
     for day, high, low, opening, close in rows:
@@ -259,6 +169,7 @@ def render_chart(rows, accuracy=""):
     \(\hat{{\sigma}}_{{t,\mathrm{{P}}}} = \sqrt{{\frac{{1}}{{4W\ln 2}}\sum_{{j=0}}^{{W-1}}\left[\ln\left(\frac{{H_{{t-j}}}}{{L_{{t-j}}}}\right)\right]^2}}\)</p>
   <p>\(r_t=\ln(C_t/C_{{t-1}})\) and \(\bar{{r}}_{{t,W}}=\frac{{1}}{{W}}\sum_{{j=0}}^{{W-1}}r_{{t-j}}\).
     \(C_t\), \(H_t\), and \(L_t\) are the close, high, and low prices.</p>
+  {extra_formulas}
 </body>
 </html>
 '''

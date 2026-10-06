@@ -108,12 +108,17 @@ class ComparisonTests(unittest.TestCase):
             self.assertIn("120 trading days", html)
             self.assertIn("80&ndash;119", html)
             self.assertNotIn("within &plusmn;", html)
-            self.assertNotIn('<script defer src=', html)
+            self.assertEqual(html.count('class="candle"'), 40)
+            self.assertIn("Day 80:", html)
+            self.assertIn("Day 119:", html)
+            self.assertIn("Baseline formulas", html)
+            self.assertIn("Paired index:", html)
             with (output / "comparison" / "summary.csv").open(newline="", encoding="utf-8") as source:
                 summary = list(csv.DictReader(source))
             for row in summary:
-                self.assertIn(METHODS[row["method"]], html)
-                self.assertIn(f"{float(row['average_precision_mean']):.3f}", html)
+                if row["method"] in ("apvi", "arithmetic", "rolling_std", "ewma_volatility", "parkinson_volatility"):
+                    self.assertIn(METHODS[row["method"]], html)
+                    self.assertIn(f"{float(row['average_precision_mean']):.3f}", html)
 
 
 if __name__ == "__main__":

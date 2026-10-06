@@ -252,16 +252,19 @@ responses and average precision across all seeds. Matplotlib is optional;
 calculation and CSV output use only the standard library. Use `--help` for the
 simulation, split, seed, window, and threshold settings.
 
-To turn the saved results into an offline HTML page:
+To add the saved results to the candlestick page:
 
 ```powershell
 python visualize.py --comparison data/comparison --output visual.html
 ```
 
-The page reads the saved settings, summary, and first seed's test scores. It
-shows a plain results table, two static charts, and the paired formula. The
-file is self-contained and needs no plotting package or internet connection.
-Use `--output data/market.html` to refresh that existing page.
+The page keeps the original candlestick chart and baseline formulas, adding a
+small table for the five main methods and the paired formula. Candles show the
+first seed's test days; the table shows means across all seeds. Precision is
+the fraction of alerts that were correct, recall is the fraction of high days
+detected, and the false-alarm rate is the fraction of low days incorrectly
+flagged. Formatting the formulas uses MathJax and requires internet access,
+as in the original chart. Use `--output data/market.html` to refresh that page.
 
 ### Initial synthetic results
 
